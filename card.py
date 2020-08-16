@@ -213,7 +213,7 @@ class Player:
 	
 	def play_card(self, hand_state):
 		card_pos = self.card_to_play_position(hand_state)
-		print self, self.hand[card_pos]
+		# print self, self.hand[card_pos]
 		card = self.hand.play(card_pos)
 		hand_state.add_played_card(card)
 	
@@ -356,7 +356,7 @@ class Game:
 		
 	def deal(self):
 		shuffled_deck = [x for x in random.sample(self.deck, len(self.deck))]
-		print [str(x) for x in shuffled_deck]
+		# print [str(x) for x in shuffled_deck]
 		for i, player in enumerate(self.players):
 			cards = shuffled_deck[i * 5 : (i + 1) * 5]
 			player.deal(Hand(cards))

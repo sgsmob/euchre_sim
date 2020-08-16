@@ -1,3 +1,4 @@
+from collections import defaultdict
 from card import Hand
 
 class Logger:
@@ -24,7 +25,10 @@ class Logger:
 		self.curr_data = None
 		
 	def __str__(self):
-		return "\n".join(str(L) for L in self.logs)
+		return "\n".join(str(L) for L in self)
+		
+	def __iter__(self):
+		return iter(self.logs)
 	
 	@staticmethod
 	def offset(player, dealer):
@@ -56,3 +60,22 @@ class Logger:
 	def commit_log(self):
 		self.logs.append(Logger.Log(self.curr_data))
 		self.curr_data = {}
+
+	'''
+	Analysis functions
+	'''
+
+	def distribution_of_points(self):
+		counts = defaultdict(int)
+		for log in self:
+			counts[log.score] += 1
+		return counts
+		
+	def average_points_per_hand(self):
+		dist = self.distribution_of_points()
+		total_points = 0
+		total_hands = 0
+		for points, hands in dist.items():
+			total_points += points * hands
+			total_hands += hands
+		return float(total_points) / total_hands
