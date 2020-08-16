@@ -3,7 +3,7 @@ from collections import defaultdict
 
 class Card:
 	suit_enum = {"C": 1, "S": 2, "D": 4, "H": 8}
-	rank_enum = {"9": 1, "X": 2, "J": 3, "Q":4, "K":5, "A":6}
+	rank_enum = {"9": 0, "X": 1, "J": 2, "Q":3, "K":4, "A":5}
 	same_color = {"C": "S", "S": "C", "D": "H", "H": "D"}
 
 	@classmethod
@@ -64,11 +64,13 @@ class Card:
 	def power(self, trump_suit):
 		power_level = self.rank_enum[self.rank]
 		if self.is_trump(trump_suit):
-			power_level += 7
+			power_level += 6
 			if self.rank == "J":
-				power_level += 4
+				power_level += 3
 				if self.suit == trump_suit:
 					power_level += 1
+			elif self.rank == "Q" or self.rank == "K" or self.rank == "A":
+				power_level -= 1
 		return power_level
 		
 	def as_tuple(self):
@@ -119,7 +121,8 @@ class Hand:
 		return iter(self.raw_cards)
 
 	def view(self, trump_suit):
-		return list(sorted((CardView(card, i, trump_suit) for i, card in enumerate(self.raw_cards)), key=lambda x: x.power))
+		return list(sorted((CardView(card, i, trump_suit)
+			for i, card in enumerate(self.raw_cards)), key=lambda x: x.power))
 
 	def pick_up_card(self, up_card):
 		worst_card = self.view(up_card.suit)[0]
@@ -128,7 +131,7 @@ class Hand:
 	def play(self, pos):
 		return self.raw_cards.pop(pos)
 
-	
+
 class Player:
 	def __init__(self, pos):
 		self.pos = pos
@@ -141,16 +144,17 @@ class Player:
 	def deal(self, hand):
 		self.hand = hand
 	
-	'''
-	Determine whether to call trump given the displayed card and the position
-	of the dealer.
-	
-	If `choose_suit` is False, the player chooses any suit not matching `card`
-	to be trump or pass if they so choose.  The dealer may not pass.
-	
-	Returns the suit called or None when passing.
-	'''
 	def decide_to_call(self, up_card, dealer_pos, choose_suit):
+		'''
+		Determine whether to call trump given the displayed card and the
+		position of the dealer.
+		
+		If `choose_suit` is False, the player chooses any suit not matching
+		`card` to be trump or pass if they so choose.  The dealer may not
+		pass.
+		
+		Returns the suit called or None when passing.
+		'''
 		if choose_suit:
 			# Store the estimated number of winners and suit called.
 			best = (0, None)
@@ -204,38 +208,48 @@ class Player:
 				next_best_trump_idx += 1
 		return counters["side_ace"] + counters["trump_winners"] + counters["off_suit_trump"]
 	
-
 	def pick_up_card(self, up_card):
 		self.hand.pick_up_card(up_card)
 	
-	def play_card(self, game_state):
-		pos = self.card_to_play_position(game_state)
-		print self, pos
-		card = self.hand.play(pos)
-		game_state.add_played_card(card)
+	def play_card(self, hand_state):
+		card_pos = self.card_to_play_position(hand_state)
+		print self, self.hand[card_pos]
+		card = self.hand.play(card_pos)
+		hand_state.add_played_card(card)
 	
-	'''
-	Selects the position of the card to play in this turn.
-	'''
-	def card_to_play_position(self, game_state):
+	def card_to_play_position(self, hand_state):
+		'''
+		Selects the position of the card to play in this turn.
+		'''
 		# Early out when there is no decision to make.
 		if len(self.hand) == 1:
 			return 0
 
-		is_on_bidding_team = (self.team == game_state.bid.bidding_team())
-		trump = game_state.bid.trump_suit
-		hand = self.hand.view(trump)
+		is_on_bidding_team = (self.team == hand_state.bid.bidding_team())
+		trick_state = hand_state.trick_state
+		trump = trick_state.trump_suit
+		hand_view = self.hand.view(trump)
+		
+		def highest_non_trump_pos():
+			'''
+			Returns the position of the most powerful trump card in hand_view
+			or 0 if all cards are trump.
+			'''
+			for card in reversed(hand_view):
+				if not card.is_trump(trump):
+					return card.pos
+			return 0
 
-		if game_state.cards_in_play:
-			cards_in_led_suit = filter(lambda x: x.suit == game_state.suit_led, hand)
-			winning_pos, winning_card = game_state.current_winning_card()
-			partner_is_leading = (len(game_state.cards_in_play) % 2 == winning_pos % 2)
+		if trick_state.cards_in_play:
+			cards_in_led_suit = filter(lambda x: x.suit == trick_state.suit_led, hand_view)
+			winning_pos, winning_card = trick_state.current_winning_card()
+			partner_is_leading = (len(trick_state.cards_in_play) % 2 == winning_pos % 2)
 			# Don't overplay partner if possible.
 			if partner_is_leading:
 				if cards_in_led_suit:
 					return cards_in_led_suit[0].pos
 				else:
-					return hand[0].pos					
+					return hand_view[0].pos					
 			else:
 				if cards_in_led_suit:
 					# Play lowest card that can win in suit.
@@ -245,54 +259,72 @@ class Player:
 					# Otherwise, there are no winners and we should throw away our worst card.
 					return cards_in_led_suit[0].pos
 				else:
-					trump_cards = filter(lambda x: x.suit == game_state.bid.trump_suit, hand)
+					trump_cards = filter(lambda x: x.suit == trump, hand_view)
 					# Play lowest trump card that can win.
 					for card in trump_cards:
 						if card.power > winning_card.power:
 							return card.pos
 					# Otherwise, there are no winners and we should throw away our worst card.
-					return hand[0].pos		
+					return hand_view[0].pos		
 		else:
-			# Lead highest card when you called.
+			# Lead a high card when you called.
 			if is_on_bidding_team:
-				return hand[-1].pos
+				best_card = hand_view[-1]
+				# Lead the highest trump card if you have it.
+				if best_card.is_trump(trump) and max(hand_state.unseen_trump_power) == best_card.power:
+					return best_card.pos
+				else:
+					return highest_non_trump_pos()
 			# Lead highest non-trump if you didn't call.
 			else:
-				for card in reversed(hand):
-					if not card.is_trump(trump):
-						return card.pos
-				# Play the worst card if all you have left is trump
-				return 0
+				return highest_non_trump_pos()
 
 
-class GameState:
+class HandState:
+	'''
+	Class to keep track of the state of the current hand, such as who dealt
+	and which cards have been played.
+	'''
+	class TrickState:
+		'''
+		Class to keep track of the state of the current trick, such as who
+		lead and who is winning.
+		'''
+		def __init__(self, leader, trump_suit):
+			self.suit_led = None
+			self.cards_in_play = []
+			self.leader = leader
+			self.trump_suit = trump_suit
+
+		def current_winning_card(self):
+			valid_cards = filter(lambda x: (x[1].suit == self.trump_suit or x[1].suit == self.suit_led),
+				enumerate(self.cards_in_play))
+			return max(valid_cards, key=lambda x: x[1].power)
+
+		def add_played_card(self, card):
+			if not self.cards_in_play:
+				self.suit_led = card.suit
+			self.cards_in_play.append(CardView(card, -1, self.trump_suit))
+
 	def __init__(self, bid, dealer_pos):
 		self.tricks = [0, 0]
 		self.bid = bid
 		self.dealer_pos = dealer_pos
-		self.leader = (dealer_pos + 1) % 4
-		self.cards_in_play = []
 		self.unseen_cards = set(str(c) for c in Card.deck())
-		self.suit_led = None
-	
-	def current_winning_card(self):
-		valid_cards = filter(lambda x: (x[1].suit == self.bid.trump_suit or x[1].suit == self.suit_led),
-			enumerate(self.cards_in_play))
-		return max(valid_cards, key=lambda x: x[1].power)
+		self.unseen_trump_power = set(i for i in range(6, 13))
+		self.trick_state = self.TrickState((dealer_pos + 1) % 4, self.bid.trump_suit)
 			
 	def end_trick(self):
-		winner_relative_pos, _ = self.current_winning_card()
-		self.leader = (self.leader + winner_relative_pos) % 4
-		self.tricks[self.leader % 2] += 1
-		self.cards_in_play = []
-		self.suit_led = None
+		winner_relative_pos, _ = self.trick_state.current_winning_card()
+		next_leader = (self.trick_state.leader + winner_relative_pos) % 4
+		self.tricks[next_leader % 2] += 1
+		self.trick_state = self.TrickState(next_leader, self.bid.trump_suit)
 		
 	def add_played_card(self, card):
-		if not self.cards_in_play:
-			self.suit_led = card.suit
-		self.cards_in_play.append(CardView(card, -1, self.bid.trump_suit))
-		print card
+		self.trick_state.add_played_card(card)
 		self.unseen_cards.remove(str(card))
+		if card.is_trump(self.bid.trump_suit):
+			self.unseen_trump_power.remove(card.power(self.bid.trump_suit))
 
 
 class Bid:
@@ -303,9 +335,8 @@ class Bid:
 	def bidding_team(self):
 		return self.player.team
 
-	# Returns change in score the team who scored points this round.
 	def score(self, tricks):
-		print tricks
+		'''Returns change in score the team who scored points this round.'''
 		bidding_tricks = tricks[self.player.team]
 		if (bidding_tricks < 3):
 			return ((self.bidding_team() + 1) % 2, 2)
@@ -322,7 +353,6 @@ class Game:
 		self.dealer_pos = 0
 		self.deck = list(Card.deck())
 		self.score = [0, 0]
-		print [str(x) for x in sorted(self.deck)]
 		
 	def deal(self):
 		shuffled_deck = [x for x in random.sample(self.deck, len(self.deck))]
@@ -345,11 +375,11 @@ class Game:
 		up_card = self.deal()
 		bid = self.select_bid(up_card)
 
-		game_state = GameState(bid, self.dealer_pos)
+		hand_state = HandState(bid, self.dealer_pos)
 		for _ in range(5):
-			self.play_trick(game_state)
+			self.play_trick(hand_state)
 		
-		self.update_score(game_state.tricks, bid)
+		self.update_score(hand_state.tricks, bid)
 		self.logger.commit_log()
 		
 	def play(self):
@@ -379,10 +409,10 @@ class Game:
 				
 		raise ValueError("Dealer needed to call trump on hand " + self.players[self.dealer_pos].hand)
 		
-	def play_trick(self, game_state):
-		for player in self.turn_order(game_state.leader):
-			player.play_card(game_state)
-		game_state.end_trick()
+	def play_trick(self, hand_state):
+		for player in self.turn_order(hand_state.trick_state.leader):
+			player.play_card(hand_state)
+		hand_state.end_trick()
 		
 	def update_score(self, tricks, bid):
 		team, points_gained = bid.score(tricks)

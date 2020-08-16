@@ -26,12 +26,12 @@ class Logger:
 	def __str__(self):
 		return "\n".join(str(L) for L in self.logs)
 	
-	'''
-	Normalizes the position indicated by player such that the left of the
-	dealer is at position 0 and the dealer is at position 3.
-	'''
 	@staticmethod
 	def offset(player, dealer):
+		'''
+		Normalizes the position indicated by player such that the left of the
+		dealer is at position 0 and the dealer is at position 3.
+		'''
 		return (player - dealer + 3) % 4
 	
 	def init_log(self, dealer_pos):
