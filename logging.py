@@ -106,4 +106,4 @@ class Logger:
 					first_k_below_0.insert(i, (hand, expected_pts))
 					first_k_below_0.pop()
 					break
-		return itertools.chain(first_k_above_0, first_k_below_0)
+		return itertools.chain(reversed(first_k_above_0), first_k_below_0)
