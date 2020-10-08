@@ -1,5 +1,6 @@
 from collections import defaultdict
-from card import Hand
+from card import Card, Hand
+import itertools
 
 class Logger:
 	class Log:
@@ -29,6 +30,9 @@ class Logger:
 		
 	def __iter__(self):
 		return iter(self.logs)
+
+	def __len__(self):
+		return len(self.logs)
 	
 	@staticmethod
 	def offset(player, dealer):
@@ -79,3 +83,27 @@ class Logger:
 			total_points += points * hands
 			total_hands += hands
 		return float(total_points) / total_hands
+		
+	def top_tuples(self, k):
+		counter = defaultdict(int)
+		score_sum = defaultdict(float)
+		for log in self:
+			hand = log.power_hand_tuple[log.caller]
+			hand_str = " ".join([Card.power_to_str[i] for i in hand])
+			counter[hand_str] += 1
+			score_sum[hand_str] += log.score
+		print len(counter), "unique hands"
+		first_k_above_0 = [(None, 1) for _ in range(k)]
+		first_k_below_0 = [(None, -1) for _ in range(k)]
+		for hand, c in counter.iteritems():
+			expected_pts = score_sum[hand] / c
+			for i in range(k):
+				if expected_pts > 0 and expected_pts < first_k_above_0[i][1]:
+					first_k_above_0.insert(i, (hand, expected_pts))
+					first_k_above_0.pop()
+					break
+				elif expected_pts < 0 and expected_pts > first_k_below_0[i][1]:
+					first_k_below_0.insert(i, (hand, expected_pts))
+					first_k_below_0.pop()
+					break
+		return itertools.chain(first_k_above_0, first_k_below_0)

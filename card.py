@@ -5,6 +5,7 @@ class Card:
 	suit_enum = {"C": 1, "S": 2, "D": 4, "H": 8}
 	rank_enum = {"9": 0, "X": 1, "J": 2, "Q":3, "K":4, "A":5}
 	same_color = {"C": "S", "S": "C", "D": "H", "H": "D"}
+	power_to_str = ["9", "X", "J", "Q", "K", "A", "9*", "X*", "Q*", "K*", "A*", "JL", "JR"]
 
 	@classmethod
 	def suit_to_int(cls, suit):
