@@ -12,3 +12,5 @@ if __name__ == "__main__":
 	print logger.average_points_per_hand()
 	for hand_power_tuple, score in logger.top_tuples(10):
 		print hand_power_tuple, "\t", score
+	for t, e in logger.up_card_result():
+		print t, "\t", e

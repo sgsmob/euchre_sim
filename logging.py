@@ -107,3 +107,19 @@ class Logger:
 					first_k_below_0.pop()
 					break
 		return itertools.chain(reversed(first_k_above_0), first_k_below_0)
+		
+	def up_card_result(self):
+		up_card_score_sum = defaultdict(float)
+		up_card_count = defaultdict(int)
+		for log in self:
+			calling_team_dealt = (log.caller % 2 == 1)
+			dealer_called = (log.caller == 3)
+			call_info = (calling_team_dealt, dealer_called, log.up_card.rank)
+			up_card_count[call_info] += 1
+			up_card_score_sum[call_info] += log.score
+
+		expected_points = [(t, s / up_card_count[t]) for t, s in up_card_score_sum.items()]
+		return sorted(expected_points, key=lambda x: x[1], reverse=True)
+			
+		
+			
